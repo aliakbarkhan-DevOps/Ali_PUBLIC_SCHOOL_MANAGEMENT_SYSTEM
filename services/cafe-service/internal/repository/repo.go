@@ -138,3 +138,34 @@ func (r *Repository) UpdateOrderStatus(id int, status string) error {
 	_, err := r.db.Exec("UPDATE orders SET status = $1 WHERE id = $2", status, id)
 	return err
 }
+
+func (r *Repository) GetGroceries() ([]models.CafeGrocery, error) {
+	rows, err := r.db.Query("SELECT id, item_name, quantity, status FROM cafe_groceries ORDER BY id DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	groceries := []models.CafeGrocery{}
+	for rows.Next() {
+		var g models.CafeGrocery
+		if err := rows.Scan(&g.ID, &g.ItemName, &g.Quantity, &g.Status); err != nil {
+			return nil, err
+		}
+		groceries = append(groceries, g)
+	}
+	return groceries, nil
+}
+
+func (r *Repository) CreateGrocery(g models.CafeGrocery) (models.CafeGrocery, error) {
+	err := r.db.QueryRow(
+		"INSERT INTO cafe_groceries (item_name, quantity, status) VALUES ($1, $2, $3) RETURNING id",
+		g.ItemName, g.Quantity, g.Status,
+	).Scan(&g.ID)
+	return g, err
+}
+
+func (r *Repository) UpdateGroceryStatus(id int, status string) error {
+	_, err := r.db.Exec("UPDATE cafe_groceries SET status = $1 WHERE id = $2", status, id)
+	return err
+}

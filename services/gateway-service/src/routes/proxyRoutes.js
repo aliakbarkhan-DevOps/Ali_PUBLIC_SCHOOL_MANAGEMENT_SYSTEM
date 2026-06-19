@@ -2,15 +2,36 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const db = require('../models/db');
+
+const proxyLogger = async (req, res, next) => {
+    if (req.user && req.method !== 'GET') {
+        try {
+            const action = `${req.method} ${req.originalUrl}`;
+            let details = '';
+            if (req.body) {
+                const bodyCopy = { ...req.body };
+                if (bodyCopy.password) bodyCopy.password = '***';
+                details = JSON.stringify(bodyCopy);
+            }
+            await db.query(
+                'INSERT INTO activity_logs (user_id, email, role, action, details) VALUES ($1, $2, $3, $4, $5)',
+                [req.user.id, req.user.email, req.user.role, action, details]
+            );
+        } catch (err) {
+            console.error('Failed to log proxy activity:', err.message);
+        }
+    }
+    next();
+};
 
 const setupProxy = (path, targetEnv) => {
     const target = process.env[targetEnv] || 'http://localhost:8080';
-    router.use(path, authMiddleware, createProxyMiddleware({
+    router.use(path, authMiddleware, proxyLogger, createProxyMiddleware({
         target,
         changeOrigin: true,
         pathRewrite: (pathStr) => {
-            const segment = path.replace('/api', '');
-            return pathStr.replace(path, segment);
+            return pathStr.replace(path, '');
         },
         onProxyReq: (proxyReq, req) => {
             if (req.user) {
@@ -18,6 +39,12 @@ const setupProxy = (path, targetEnv) => {
                 proxyReq.setHeader('X-User-Role', req.user.role);
                 proxyReq.setHeader('X-User-Email', req.user.email);
                 proxyReq.setHeader('X-User-Name', encodeURIComponent(req.user.name));
+            }
+            if (req.body && req.method !== 'GET') {
+                const bodyData = JSON.stringify(req.body);
+                proxyReq.setHeader('Content-Type', 'application/json');
+                proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+                proxyReq.write(bodyData);
             }
         },
         onError: (err, req, res) => {
@@ -39,5 +66,6 @@ setupProxy('/api/research', 'RESEARCH_LAB_SERVICE_URL');
 setupProxy('/api/labs', 'RESEARCH_LAB_SERVICE_URL');
 setupProxy('/api/parking', 'PARKING_ALUMNI_SERVICE_URL');
 setupProxy('/api/alumni', 'PARKING_ALUMNI_SERVICE_URL');
+setupProxy('/api/reports', 'REPORT_SERVICE_URL');
 
 module.exports = router;

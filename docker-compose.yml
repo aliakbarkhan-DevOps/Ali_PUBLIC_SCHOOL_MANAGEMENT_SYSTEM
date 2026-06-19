@@ -40,6 +40,7 @@ services:
       ASSIGNMENT_QUIZ_SERVICE_URL: http://assignment-quiz-service:8001
       RESEARCH_LAB_SERVICE_URL: http://research-lab-service:8002
       PARKING_ALUMNI_SERVICE_URL: http://parking-alumni-service:8003
+      REPORT_SERVICE_URL: http://report-service:8004
     depends_on:
       postgres:
         condition: service_healthy
@@ -193,6 +194,31 @@ services:
       - VITE_API_GATEWAY_URL=http://localhost:5005
     depends_on:
       - gateway-service
+
+  devops-dashboard:
+    build:
+      context: ./frontends/devops-dashboard
+      dockerfile: Dockerfile
+    container_name: asst-devops-dashboard
+    ports:
+      - "3002:3002"
+    environment:
+      - VITE_API_GATEWAY_URL=http://localhost:5005
+    depends_on:
+      - gateway-service
+
+  report-service:
+    build:
+      context: ./services/report-service
+      dockerfile: Dockerfile
+    container_name: asst-report-service
+    ports:
+      - "8004:8004"
+    environment:
+      PORT: 8004
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

@@ -12,6 +12,7 @@ func Setup(h *handler.Handler) *http.ServeMux {
 	mux.HandleFunc("/wallet/topup", h.HandleTopup)
 	mux.HandleFunc("/order", h.HandleOrder)
 	mux.HandleFunc("/orders", h.HandleOrders)
+	mux.HandleFunc("/groceries", h.HandleGroceries)
 	mux.HandleFunc("/health", h.HandleHealth)
 	return mux
 }

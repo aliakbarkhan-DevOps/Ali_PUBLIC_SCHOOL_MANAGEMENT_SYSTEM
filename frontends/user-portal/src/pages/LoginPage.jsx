@@ -6,7 +6,15 @@ export const LoginPage = () => {
   const { login } = useContext(AuthContext);
   const [email, setEmail] = useState('student@asst.edu');
   const [password, setPassword] = useState('student123');
+  const [selectedPortal, setSelectedPortal] = useState('student');
   const [authError, setAuthError] = useState('');
+
+  const handlePortalChange = (val) => {
+    setSelectedPortal(val);
+    if (val === 'admin') {
+      window.location.href = 'http://localhost:3000';
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -19,6 +27,10 @@ export const LoginPage = () => {
       });
       const data = await res.json();
       if (res.ok) {
+        if (data.user.role !== selectedPortal) {
+          setAuthError(`Access Denied: Your account role does not match the selected ${selectedPortal.replace('_', ' ')} portal.`);
+          return;
+        }
         login(data.token, data.user);
       } else {
         setAuthError(data.error || 'Login failed');
@@ -26,6 +38,12 @@ export const LoginPage = () => {
     } catch (err) {
       setAuthError('API Gateway not online.');
     }
+  };
+
+  const selectShortcut = (role, mail, pass) => {
+    setSelectedPortal(role);
+    setEmail(mail);
+    setPassword(pass);
   };
 
   return (
@@ -46,6 +64,20 @@ export const LoginPage = () => {
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
+            <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Select Portal Access</label>
+            <select 
+              value={selectedPortal} 
+              onChange={e => handlePortalChange(e.target.value)} 
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', border: '1px solid rgba(255,255,255,0.1)', outline: 'none' }}
+            >
+              <option value="student">Student Portal</option>
+              <option value="teacher">Teacher Portal</option>
+              <option value="cafe_operator">Cafeteria Portal</option>
+              <option value="librarian">Library Portal</option>
+              <option value="admin">Admin Portal</option>
+            </select>
+          </div>
+          <div>
             <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Campus Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
           </div>
@@ -58,8 +90,12 @@ export const LoginPage = () => {
         
         <div style={{ marginTop: '24px', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>
           <p style={{ marginBottom: '8px' }}><strong>Mock Account Shortcuts:</strong></p>
-          <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }} onClick={() => { setEmail('student@asst.edu'); setPassword('student123'); }}>Student Account</button>
-          <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => { setEmail('teacher@asst.edu'); setPassword('teacher123'); }}>Teacher Account</button>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
+            <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => selectShortcut('student', 'student@asst.edu', 'student123')}>Student</button>
+            <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => selectShortcut('teacher', 'teacher@asst.edu', 'teacher123')}>Teacher</button>
+            <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => selectShortcut('cafe_operator', 'cafe@asst.edu', 'cafe123')}>Cafe Operator</button>
+            <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => selectShortcut('librarian', 'library@asst.edu', 'library123')}>Librarian</button>
+          </div>
         </div>
       </div>
     </div>

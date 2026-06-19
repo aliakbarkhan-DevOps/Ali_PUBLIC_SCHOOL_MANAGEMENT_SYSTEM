@@ -22,3 +22,10 @@ type Order struct {
 	OrderDate  string    `json:"order_date"`
 	Status     string    `json:"status"` // 'pending', 'ready', 'completed'
 }
+
+type CafeGrocery struct {
+	ID       int    `json:"id"`
+	ItemName string `json:"item_name"`
+	Quantity string `json:"quantity"`
+	Status   string `json:"status"` // 'needed', 'purchased'
+}

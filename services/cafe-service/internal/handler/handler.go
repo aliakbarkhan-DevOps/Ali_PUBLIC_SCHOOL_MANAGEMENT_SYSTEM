@@ -169,3 +169,48 @@ func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status": "UP", "service": "Cafe & Cafeteria Service"}`))
 }
+
+func (h *Handler) HandleGroceries(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodGet {
+		groceries, err := h.svc.GetGroceries()
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		json.NewEncoder(w).Encode(groceries)
+	} else if r.Method == http.MethodPost {
+		var g models.CafeGrocery
+		if err := json.NewDecoder(r.Body).Decode(&g); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if g.Status == "" {
+			g.Status = "needed"
+		}
+		newG, err := h.svc.CreateGrocery(g)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(201)
+		json.NewEncoder(w).Encode(newG)
+	} else if r.Method == http.MethodPut {
+		var req struct {
+			ID     int    `json:"id"`
+			Status string `json:"status"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		err := h.svc.UpdateGroceryStatus(req.ID, req.Status)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"id": req.ID, "status": req.Status, "message": "Grocery status updated"})
+	} else {
+		http.Error(w, "Method not allowed", 405)
+	}
+}

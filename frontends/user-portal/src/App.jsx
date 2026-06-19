@@ -8,6 +8,8 @@ import { CourseworkPage } from './pages/CourseworkPage';
 import { CampusPage } from './pages/CampusPage';
 import { ResearchAlumniPage } from './pages/ResearchAlumniPage';
 import { WalletFeesPage } from './pages/WalletFeesPage';
+import { CafeOperatorPage } from './pages/CafeOperatorPage';
+import { LibrarianPage } from './pages/LibrarianPage';
 
 function MainApp() {
   const { token, user, logout } = useContext(AuthContext);
@@ -27,6 +29,9 @@ function MainApp() {
   const [parkingSlots, setParkingSlots] = useState([]);
   const [researchProjects, setResearchProjects] = useState([]);
   const [alumniMentors, setAlumniMentors] = useState([]);
+  const [cafeGroceries, setCafeGroceries] = useState([]);
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [users, setUsers] = useState([]);
   
   // Assignments & Quiz Specifics
   const [assignments, setAssignments] = useState([]);
@@ -76,6 +81,34 @@ function MainApp() {
     return () => ws.close();
   }, [token]);
 
+  // Handle default landing page based on role
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === 'cafe_operator') {
+      setActiveTab('cafeteria');
+    } else if (user.role === 'librarian') {
+      setActiveTab('library');
+    } else {
+      setActiveTab('dashboard');
+    }
+  }, [user]);
+
+  // Click Telemetry tracking hook
+  useEffect(() => {
+    const handleTelemetryClick = (e) => {
+      const btn = e.target.closest('button, a, [role="button"], input[type="submit"]');
+      if (!btn) return;
+      const elementId = btn.id || btn.innerText.trim().substring(0, 30) || btn.tagName;
+      fetch(`${API_BASE}/api/devops/metrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ elementId, page: `User Portal - Tab: ${activeTab}` })
+      }).catch(() => {});
+    };
+    window.addEventListener('click', handleTelemetryClick);
+    return () => window.removeEventListener('click', handleTelemetryClick);
+  }, [activeTab]);
+
   // Load Tab Specific Data
   useEffect(() => {
     if (!token || !user) return;
@@ -87,18 +120,21 @@ function MainApp() {
     
     if (activeTab === 'dashboard') {
       fetchList(`/api/notifications`, setNotifications);
+      fetchList(`/api/users/attendance/today`, setTodayAttendance);
       if (user.role === 'student') {
         fetchList(`/api/finance/invoices?user_id=${user.id}`, setInvoices);
         fetchList(`/api/cafe/wallet?user_id=${user.id}`, setWallet);
         fetchList(`/api/schedule/timetables?student_id=${user.id}`, setTimetables);
-      } else {
+        fetchList(`/api/library/borrows?user_id=${user.id}`, setBorrows);
+        fetchList(`/api/parking/slots`, setParkingSlots);
+      } else if (user.role === 'teacher') {
         fetchList(`/api/schedule/timetables?teacher_id=${user.id}`, setTimetables);
       }
     } else if (activeTab === 'academics') {
       if (user.role === 'student') {
         fetchList(`/api/schedule/timetables?student_id=${user.id}`, setTimetables);
         fetchList(`/api/academics/marks?student_id=${user.id}`, setMarks);
-      } else {
+      } else if (user.role === 'teacher') {
         fetchList(`/api/schedule/timetables?teacher_id=${user.id}`, setTimetables);
         fetchList(`/api/academics/courses`, setCourses);
       }
@@ -111,7 +147,7 @@ function MainApp() {
       if (user.role === 'student') {
         fetchList(`/api/assignments/submissions?student_id=${user.id}`, setSubmissions);
         fetchList(`/api/assignments/quiz-attempts?student_id=${user.id}`, setQuizAttempts);
-      } else {
+      } else if (user.role === 'teacher') {
         fetchList(`/api/assignments/submissions`, setSubmissions);
       }
     } else if (activeTab === 'campus') {
@@ -131,6 +167,14 @@ function MainApp() {
     } else if (activeTab === 'wallet-fees' && user.role === 'student') {
       fetchList(`/api/finance/invoices?user_id=${user.id}`, setInvoices);
       fetchList(`/api/cafe/wallet?user_id=${user.id}`, setWallet);
+    } else if (activeTab === 'cafeteria') {
+      fetchList('/api/users', setUsers);
+      fetchList('/api/cafe/menu', setCafeMenu);
+      fetchList('/api/cafe/orders', setCafeOrders);
+      fetchList('/api/cafe/groceries', setCafeGroceries);
+    } else if (activeTab === 'library') {
+      fetchList(`/api/library/books`, setBooks);
+      fetchList(`/api/library/borrows`, setBorrows);
     }
   };
 
@@ -178,6 +222,101 @@ function MainApp() {
 
   const triggerPayInvoice = async (invoiceId) => {
     handlePost('/api/finance/invoices/pay', { invoice_id: invoiceId }, 'Tuition Fee paid successfully!');
+  };
+
+  const triggerUpdateGroceryStatus = async (groceryId, status) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/cafe/groceries`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id: groceryId, status })
+      });
+      if (res.ok) {
+        showFeedback('success', 'Grocery stock status updated');
+        loadTabData();
+      }
+    } catch (e) {
+      showFeedback('danger', 'Network error');
+    }
+  };
+
+  const triggerUpdateOrderStatus = async (orderId, status) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/cafe/orders`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id: orderId, status })
+      });
+      if (res.ok) {
+        showFeedback('success', `Order status updated to: ${status}`);
+        loadTabData();
+      }
+    } catch (e) {
+      showFeedback('danger', 'Network error');
+    }
+  };
+
+  const triggerCheckin = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/users/attendance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'present' })
+      });
+      if (res.ok) {
+        showFeedback('success', 'Checked in successfully!');
+        loadTabData();
+      }
+    } catch (e) {
+      showFeedback('danger', 'Check-in failed');
+    }
+  };
+
+  const triggerGeneratePDF = async (title, subtitle, headers, rows, themeColor = "#3b82f6") => {
+    try {
+      const res = await fetch(`${API_BASE}/api/reports/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title,
+          subtitle,
+          theme_color: themeColor,
+          headers,
+          rows,
+          summary: [
+            { label: "Report Date", value: new Date().toLocaleDateString() },
+            { label: "Record Count", value: rows.length.toString() }
+          ]
+        })
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title.toLowerCase().replace(/\s+/g, '_')}_report.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showFeedback('success', 'PDF download complete!');
+      } else {
+        showFeedback('danger', 'Failed to generate PDF');
+      }
+    } catch (e) {
+      showFeedback('danger', 'Report service offline');
+    }
   };
 
   const triggerTopupWallet = () => {
@@ -298,7 +437,10 @@ function MainApp() {
   }
 
   const isStudent = user?.role === 'student';
-
+  const isTeacher = user?.role === 'teacher';
+  const isCafeOperator = user?.role === 'cafe_operator';
+  const isLibrarian = user?.role === 'librarian';
+  
   return (
     <div className="app-container">
       {/* Sidebar */}
@@ -308,36 +450,67 @@ function MainApp() {
             ASST Campus
           </h2>
           <span style={{ fontSize: '10px', color: 'var(--text-dark)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            {isStudent ? 'Student Workspace' : 'Teacher Workspace'}
+            {user?.role.replace('_', ' ').toUpperCase() + ' Workspace'}
           </span>
         </div>
-
+        
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
           <button className={`btn ${activeTab === 'dashboard' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('dashboard')}>
             📊 Dashboard
           </button>
-          <button className={`btn ${activeTab === 'academics' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('academics')}>
-            🎓 Academics
-          </button>
-          <button className={`btn ${activeTab === 'classroom' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('classroom')}>
-            📝 Coursework
-          </button>
-          <button className={`btn ${activeTab === 'campus' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('campus')}>
-            🏫 Campus Life
-          </button>
-          <button className={`btn ${activeTab === 'research-alumni' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('research-alumni')}>
-            🔬 Research & Alumni
-          </button>
+          
+          {(isStudent || isTeacher) && (
+            <>
+              <button className={`btn ${activeTab === 'academics' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('academics')}>
+                🎓 Academics
+              </button>
+              <button className={`btn ${activeTab === 'classroom' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('classroom')}>
+                📝 Coursework
+              </button>
+              <button className={`btn ${activeTab === 'campus' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('campus')}>
+                🏫 Campus Life
+              </button>
+              <button className={`btn ${activeTab === 'research-alumni' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('research-alumni')}>
+                🔬 Research & Alumni
+              </button>
+            </>
+          )}
+          
           {isStudent && (
             <button className={`btn ${activeTab === 'wallet-fees' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('wallet-fees')}>
               💳 Wallet & Fees
             </button>
           )}
+
+          {isCafeOperator && (
+            <button className={`btn ${activeTab === 'cafeteria' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('cafeteria')}>
+              🍔 Cafeteria Control
+            </button>
+          )}
+
+          {isLibrarian && (
+            <button className={`btn ${activeTab === 'library' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('library')}>
+              📚 Library Control
+            </button>
+          )}
         </nav>
 
-        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '20px' }}>
-          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-            User: <strong style={{ color: 'var(--text-main)' }}>{user?.firstName} {user?.lastName}</strong>
+        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {user?.imageUrl ? (
+              <img 
+                src={`${API_BASE}${user.imageUrl}`} 
+                alt="avatar" 
+                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+            ) : (
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700' }}>
+                {user?.firstName?.[0]}
+              </div>
+            )}
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+              User: <strong style={{ color: 'var(--text-main)', display: 'block' }}>{user?.firstName} {user?.lastName}</strong>
+            </div>
           </div>
           <button className="btn btn-danger" style={{ width: '100%', padding: '8px' }} onClick={logout}>
             Sign Out
@@ -360,9 +533,13 @@ function MainApp() {
             invoices={invoices} 
             timetables={timetables} 
             notifications={notifications} 
+            borrows={borrows}
+            parkingSlots={parkingSlots}
+            todayAttendance={todayAttendance}
+            triggerCheckin={triggerCheckin}
           />
         )}
-        {activeTab === 'academics' && (
+        {activeTab === 'academics' && (isStudent || isTeacher) && (
           <AcademicsPage 
             user={user} 
             timetables={timetables} 
@@ -372,9 +549,10 @@ function MainApp() {
             uploadMark={uploadMark} 
             setUploadMark={setUploadMark} 
             handlePost={handlePost} 
+            triggerGeneratePDF={triggerGeneratePDF}
           />
         )}
-        {activeTab === 'classroom' && (
+        {activeTab === 'classroom' && (isStudent || isTeacher) && (
           <CourseworkPage 
             user={user} 
             assignments={assignments} 
@@ -401,7 +579,7 @@ function MainApp() {
             handlePost={handlePost} 
           />
         )}
-        {activeTab === 'campus' && (
+        {activeTab === 'campus' && (isStudent || isTeacher) && (
           <CampusPage 
             user={user} 
             books={books} 
@@ -418,7 +596,7 @@ function MainApp() {
             triggerParkingRelease={triggerParkingRelease} 
           />
         )}
-        {activeTab === 'research-alumni' && (
+        {activeTab === 'research-alumni' && (isStudent || isTeacher) && (
           <ResearchAlumniPage 
             user={user} 
             researchProjects={researchProjects} 
@@ -438,6 +616,26 @@ function MainApp() {
             setTopupAmount={setTopupAmount} 
             triggerPayInvoice={triggerPayInvoice} 
             triggerTopupWallet={triggerTopupWallet} 
+          />
+        )}
+        {activeTab === 'cafeteria' && isCafeOperator && (
+          <CafeOperatorPage 
+            users={users}
+            cafeMenu={cafeMenu}
+            cafeOrders={cafeOrders}
+            cafeGroceries={cafeGroceries}
+            handlePost={handlePost}
+            triggerUpdateOrderStatus={triggerUpdateOrderStatus}
+            triggerUpdateGroceryStatus={triggerUpdateGroceryStatus}
+            triggerGeneratePDF={triggerGeneratePDF}
+          />
+        )}
+        {activeTab === 'library' && isLibrarian && (
+          <LibrarianPage 
+            books={books}
+            borrows={borrows}
+            handlePost={handlePost}
+            triggerReturnBook={triggerReturnBook}
           />
         )}
       </div>

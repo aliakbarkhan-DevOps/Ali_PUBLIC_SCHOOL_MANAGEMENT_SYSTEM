@@ -41,3 +41,15 @@ func (s *Service) GetOrders(userID int) ([]models.Order, error) {
 func (s *Service) UpdateOrderStatus(id int, status string) error {
 	return s.repo.UpdateOrderStatus(id, status)
 }
+
+func (s *Service) GetGroceries() ([]models.CafeGrocery, error) {
+	return s.repo.GetGroceries()
+}
+
+func (s *Service) CreateGrocery(g models.CafeGrocery) (models.CafeGrocery, error) {
+	return s.repo.CreateGrocery(g)
+}
+
+func (s *Service) UpdateGroceryStatus(id int, status string) error {
+	return s.repo.UpdateGroceryStatus(id, status)
+}

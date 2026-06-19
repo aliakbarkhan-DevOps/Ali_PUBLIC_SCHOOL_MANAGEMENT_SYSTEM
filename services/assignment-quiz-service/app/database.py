@@ -9,7 +9,8 @@ Base = declarative_base()
 
 for i in range(5):
     try:
-        engine = create_engine(settings.DATABASE_URL)
+        db_url = settings.DATABASE_URL.replace("postgres://", "postgresql://", 1) if settings.DATABASE_URL else settings.DATABASE_URL
+        engine = create_engine(db_url)
         with engine.connect() as conn:
             print("Connected to database successfully.")
             break

@@ -2,8 +2,21 @@ import React from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { DataTable } from '../components/ui/DataTable';
 
-export const AcademicsPage = ({ user, timetables, marks, markAttendance, setMarkAttendance, uploadMark, setUploadMark, handlePost }) => {
+export const AcademicsPage = ({ user, timetables, marks, markAttendance, setMarkAttendance, uploadMark, setUploadMark, handlePost, triggerGeneratePDF }) => {
   const isStudent = user?.role === 'student';
+
+  const exportTranscriptPDF = () => {
+    const headers = ['Exam Title', 'Course Module', 'Graded Score', 'Max Score', 'Graded At'];
+    const rows = marks.map(m => [
+      m.exam_title,
+      m.course_name,
+      m.score.toString(),
+      m.max_score.toString(),
+      new Date(m.graded_at).toLocaleDateString()
+    ]);
+    triggerGeneratePDF('ASST Academic Transcript', `Official Academic Transcript for Student: ${user.firstName} ${user.lastName} (${user.email})`, headers, rows, '#3b82f6');
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
       <GlassCard style={{ padding: '32px' }}>
@@ -22,7 +35,12 @@ export const AcademicsPage = ({ user, timetables, marks, markAttendance, setMark
 
       {isStudent ? (
         <GlassCard style={{ padding: '32px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px' }}>📝 Academic Transcript (Grades & Exams)</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '600' }}>📝 Academic Transcript (Grades & Exams)</h2>
+            <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={exportTranscriptPDF}>
+              📄 Download PDF Transcript
+            </button>
+          </div>
           <DataTable headers={['Exam Name', 'Course Module', 'Graded Score', 'Max Score', 'Graded At']}>
             {marks.map(m => (
               <tr key={m.id}>

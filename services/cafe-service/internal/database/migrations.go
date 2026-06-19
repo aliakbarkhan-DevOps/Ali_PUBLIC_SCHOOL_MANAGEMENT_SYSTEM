@@ -27,6 +27,12 @@ func InitSchema(db *sql.DB) {
 			order_date DATE NOT NULL,
 			status VARCHAR(50) NOT NULL
 		);
+		CREATE TABLE IF NOT EXISTS cafe_groceries (
+			id SERIAL PRIMARY KEY,
+			item_name VARCHAR(255) NOT NULL,
+			quantity VARCHAR(100) NOT NULL,
+			status VARCHAR(50) NOT NULL DEFAULT 'needed'
+		);
 	`)
 	if err != nil {
 		log.Fatalf("Schema init error: %v", err)

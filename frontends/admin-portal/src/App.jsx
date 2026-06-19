@@ -9,12 +9,17 @@ import { LibraryPage } from './pages/LibraryPage';
 import { AssetsPage } from './pages/AssetsPage';
 import { CafePage } from './pages/CafePage';
 import { ParkingAlumniPage } from './pages/ParkingAlumniPage';
+import { UsersPage } from './pages/UsersPage';
 
 function MainApp() {
   const { token, user, logout } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('dashboard');
   
   // Dynamic UI States
+  const [users, setUsers] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [courses, setCourses] = useState([]);
   const [classes, setClasses] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -63,11 +68,27 @@ function MainApp() {
     return () => ws.close();
   }, [token]);
 
+  // Click Telemetry tracking hook
+  useEffect(() => {
+    const handleTelemetryClick = (e) => {
+      const btn = e.target.closest('button, a, [role="button"], input[type="submit"]');
+      if (!btn) return;
+      const elementId = btn.id || btn.innerText.trim().substring(0, 30) || btn.tagName;
+      fetch(`${API_BASE}/api/devops/metrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ elementId, page: `Admin Portal - Tab: ${activeTab}` })
+      }).catch(() => {});
+    };
+    window.addEventListener('click', handleTelemetryClick);
+    return () => window.removeEventListener('click', handleTelemetryClick);
+  }, [activeTab]);
+
   // Load active tab data
   useEffect(() => {
     if (!token) return;
     loadTabData();
-  }, [token, activeTab]);
+  }, [token, activeTab, dateFilter]);
 
   const loadTabData = () => {
     setFeedback({ type: '', msg: '' });
@@ -95,6 +116,10 @@ function MainApp() {
       fetchList('/api/alumni/directory', setAlumni);
       fetchList('/api/alumni/donations', setDonations);
       fetchList('/api/parking/slots', setParkingSlots);
+    } else if (activeTab === 'users') {
+      fetchList('/api/users', setUsers);
+      fetchList('/api/users/activities', setActivities);
+      fetchList(`/api/users/attendance?date=${dateFilter}`, setAttendance);
     }
   };
 
@@ -178,6 +203,87 @@ function MainApp() {
     }
   };
 
+  const triggerUpdateStatus = async (userId, status) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${userId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        showFeedback('success', `User status updated to ${status}`);
+        loadTabData();
+      } else {
+        const err = await res.json();
+        showFeedback('danger', err.error || 'Failed to update status');
+      }
+    } catch (e) {
+      showFeedback('danger', 'Network error');
+    }
+  };
+
+  const triggerDeleteUser = async (userId) => {
+    if (!window.confirm('Are you sure you want to permanently delete this user?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        showFeedback('success', 'User deleted successfully');
+        loadTabData();
+      } else {
+        const err = await res.json();
+        showFeedback('danger', err.error || 'Failed to delete user');
+      }
+    } catch (e) {
+      showFeedback('danger', 'Network error');
+    }
+  };
+
+  const triggerGeneratePDF = async (title, subtitle, headers, rows, themeColor = "#3b82f6") => {
+    try {
+      const res = await fetch(`${API_BASE}/api/reports/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title,
+          subtitle,
+          theme_color: themeColor,
+          headers,
+          rows,
+          summary: [
+            { label: "Report Date", value: new Date().toLocaleDateString() },
+            { label: "Record Count", value: rows.length.toString() }
+          ]
+        })
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title.toLowerCase().replace(/\s+/g, '_')}_report.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showFeedback('success', 'PDF Report generated!');
+      } else {
+        showFeedback('danger', 'Failed to generate report PDF');
+      }
+    } catch (e) {
+      showFeedback('danger', 'Report microservice unavailable');
+    }
+  };
+
   if (!token) {
     return <LoginPage />;
   }
@@ -214,6 +320,9 @@ function MainApp() {
           </button>
           <button className={`btn ${activeTab === 'parking-alumni' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('parking-alumni')}>
             🚗 Parking & Alumni
+          </button>
+          <button className={`btn ${activeTab === 'users' ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setActiveTab('users')}>
+            👥 Users & Logs
           </button>
         </nav>
 
@@ -300,6 +409,19 @@ function MainApp() {
             newAlumni={newAlumni} 
             setNewAlumni={setNewAlumni} 
             handlePost={handlePost} 
+          />
+        )}
+        {activeTab === 'users' && (
+          <UsersPage 
+            users={users} 
+            activities={activities} 
+            attendance={attendance}
+            dateFilter={dateFilter}
+            setDateFilter={setDateFilter}
+            handlePost={handlePost} 
+            triggerUpdateStatus={triggerUpdateStatus} 
+            triggerDeleteUser={triggerDeleteUser} 
+            triggerGeneratePDF={triggerGeneratePDF}
           />
         )}
       </div>

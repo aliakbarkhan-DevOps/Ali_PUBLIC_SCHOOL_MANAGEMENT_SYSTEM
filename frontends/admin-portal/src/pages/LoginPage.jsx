@@ -6,7 +6,15 @@ export const LoginPage = () => {
   const { login } = useContext(AuthContext);
   const [email, setEmail] = useState('admin@asst.edu');
   const [password, setPassword] = useState('admin123');
+  const [selectedPortal, setSelectedPortal] = useState('admin');
   const [authError, setAuthError] = useState('');
+
+  const handlePortalChange = (val) => {
+    setSelectedPortal(val);
+    if (val !== 'admin') {
+      window.location.href = 'http://localhost:3001';
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -49,6 +57,20 @@ export const LoginPage = () => {
         )}
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Select Portal Access</label>
+            <select 
+              value={selectedPortal} 
+              onChange={e => handlePortalChange(e.target.value)} 
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', border: '1px solid rgba(255,255,255,0.1)', outline: 'none' }}
+            >
+              <option value="admin">Admin Portal</option>
+              <option value="student">Student Portal</option>
+              <option value="teacher">Teacher Portal</option>
+              <option value="cafe_operator">Cafeteria Portal</option>
+              <option value="librarian">Library Portal</option>
+            </select>
+          </div>
           <div>
             <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Admin Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
